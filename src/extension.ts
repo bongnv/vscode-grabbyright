@@ -21,9 +21,20 @@ function goPathFromPath(filePath: string | undefined): string | undefined {
 }
 
 function  grabbyrightFormat(textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, args: any[]) {
-	console.log("start to format");
-	const document = textEditor.document;
-	const goPath = process.env.GOPATH || goPathFromPath(document.uri.path);
+	const doc = textEditor.document;
+	if (doc.languageId !== "go") {
+		return;
+	}
+	const formatted = grabbyrightDocument(doc);
+	if (formatted.length > 0) {
+		const fileStart = new vscode.Position(0, 0);
+		const fileEnd = doc.lineAt(doc.lineCount - 1).range.end;
+		edit.replace(new vscode.Range(fileStart, fileEnd), formatted);
+	}
+}
+
+function grabbyrightDocument(doc: vscode.TextDocument): string {
+	const goPath = process.env.GOPATH || goPathFromPath(doc.uri.path);
 	const env = {
 		...process.env,
 		GOPATH: goPath,
@@ -33,35 +44,73 @@ function  grabbyrightFormat(textEditor: vscode.TextEditor, edit: vscode.TextEdit
 	const outBuf = cp.spawnSync("grabbyright", [], {
 		 env,
 		 encoding: 'utf8',
-		 input: document.getText(),
+		 input: doc.getText(),
 	});
 
 	if (outBuf.error || outBuf.status !== 0 || outBuf.stderr.length > 0) {
 		console.log("Err: ", outBuf.error, outBuf.status);
 		console.log("Stderr: ", outBuf.stderr);
+		return "";
+	}
+
+	return outBuf.stdout;
+}
+
+function grabyrightOnSave(e: vscode.TextDocumentWillSaveEvent) {
+	const doc = e.document;
+	if (doc.languageId !== "go") {
 		return;
 	}
 
-	if (outBuf.stdout.length > 0) {
+	e.waitUntil(new Promise((resolve, reject) => {
+		const formatted = grabbyrightDocument(doc);
+		if (formatted.length === 0) {
+			resolve([]);
+			return;
+		}
+
 		const fileStart = new vscode.Position(0, 0);
-		const fileEnd = document.lineAt(document.lineCount - 1).range.end;
-		console.log("replacing", outBuf.stdout);
-		edit.replace(new vscode.Range(fileStart, fileEnd), outBuf.stdout);
+		const fileEnd = doc.lineAt(doc.lineCount - 1).range.end;
+		resolve([vscode.TextEdit.replace(new vscode.Range(fileStart, fileEnd), formatted)]);
+		return;
+	}));
+}
+
+function prepareOnSave(curSub: vscode.Disposable | undefined, subscriptions: vscode.Disposable[]): vscode.Disposable | undefined {
+	const config = vscode.workspace.getConfiguration('grabbyright', vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : null);
+	if (!curSub && config['onSave']) {
+		return vscode.workspace.onWillSaveTextDocument(
+			grabyrightOnSave,
+			null,
+			subscriptions,
+		);
 	}
+
+	if (curSub && !config['onSave']) {
+		curSub.dispose();
+		return undefined;
+	}
+
+	return curSub;
 }
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export function activate(ctx: vscode.ExtensionContext) {
 		// Use the console to output diagnostic information (console.log) and errors (console.error)
 		// This line of code will only be executed once when your extension is activated
 		console.log('Congratulations, your extension "grabbyright" is now active!');
-		const disposable = vscode.commands.registerTextEditorCommand(
+		ctx.subscriptions.push(vscode.commands.registerTextEditorCommand(
 			"extension.grabbyright",
 			grabbyrightFormat,
-		);
+		));
 
-		context.subscriptions.push(disposable);
+		let onSaveSubscription = prepareOnSave(undefined, ctx.subscriptions);
+		ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration(() => {
+			// config updated
+			console.log("configuration updated");
+			onSaveSubscription = prepareOnSave(onSaveSubscription, ctx.subscriptions);
+		}));
 }
 
 // this method is called when your extension is deactivated
