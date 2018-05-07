@@ -4,6 +4,7 @@
 	"description": "An extension to run grabbyright",
 	"version": "0.0.1",
 	"publisher": "bongnv",
+	"repository": "https://github.com/bongnv/vscode-grabbyright",
 	"engines": {
 		"vscode": "^1.23.0"
 	},

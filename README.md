@@ -22,11 +22,7 @@ TODO
 
 ## Release Notes
 
-TODO
-
-### 0.0.1
-
-Initial release of `grabbyright`
+See [`CHANGELOG.md`](CHANGELOG.md) file
 
 ### For more information
 
