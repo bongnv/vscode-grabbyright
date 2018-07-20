@@ -30,6 +30,14 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Run grabbyright when saving documents."
+                },
+                "grabbyright.fmtCmds": {
+                    "type": "array",
+                    "default": ["grabbyright"],
+                    "description": "Custom format commands.",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         }

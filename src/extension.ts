@@ -5,7 +5,6 @@ import cp = require('child_process');
 import path = require('path');
 
 function goPathFromPath(filePath: string | undefined): string | undefined {
-	console.log(filePath);
 	if (!filePath) {
 		return undefined;
 	}
@@ -20,12 +19,14 @@ function goPathFromPath(filePath: string | undefined): string | undefined {
 	return undefined;
 }
 
-function  grabbyrightFormat(textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, args: any[]) {
+function grabbyrightFormat(textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, args: any[]) {
 	const doc = textEditor.document;
 	if (doc.languageId !== "go") {
 		return;
 	}
-	const formatted = grabbyrightDocument(doc);
+
+	const config = vscode.workspace.getConfiguration('grabbyright', vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : null);
+	const formatted = grabbyrightDocument(config["fmtCmds"], doc);
 	if (formatted.length > 0) {
 		const fileStart = new vscode.Position(0, 0);
 		const fileEnd = doc.lineAt(doc.lineCount - 1).range.end;
@@ -33,7 +34,7 @@ function  grabbyrightFormat(textEditor: vscode.TextEditor, edit: vscode.TextEdit
 	}
 }
 
-function grabbyrightDocument(doc: vscode.TextDocument): string {
+function grabbyrightDocument(fmtCmds: string[], doc: vscode.TextDocument): string {
 	const goPath = process.env.GOPATH || goPathFromPath(doc.uri.path);
 	const env = {
 		...process.env,
@@ -41,7 +42,7 @@ function grabbyrightDocument(doc: vscode.TextDocument): string {
 		PATH: goPath + "/bin:"+ process.env.PATH,
 	};
 
-	const outBuf = cp.spawnSync("grabbyright", [], {
+	const outBuf = cp.spawnSync(fmtCmds[0],fmtCmds.slice(1), {
 		 env,
 		 encoding: 'utf8',
 		 input: doc.getText(),
@@ -56,14 +57,14 @@ function grabbyrightDocument(doc: vscode.TextDocument): string {
 	return outBuf.stdout;
 }
 
-function grabyrightOnSave(e: vscode.TextDocumentWillSaveEvent) {
+function grabyrightOnSave(fmtCmds: string[], e: vscode.TextDocumentWillSaveEvent) {
 	const doc = e.document;
 	if (doc.languageId !== "go") {
 		return;
 	}
 
 	e.waitUntil(new Promise((resolve, reject) => {
-		const formatted = grabbyrightDocument(doc);
+		const formatted = grabbyrightDocument(fmtCmds, doc);
 		if (formatted.length === 0 || formatted === doc.getText()) {
 			resolve([]);
 			return;
@@ -80,7 +81,7 @@ function prepareOnSave(curSub: vscode.Disposable | undefined, subscriptions: vsc
 	const config = vscode.workspace.getConfiguration('grabbyright', vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : null);
 	if (!curSub && config['onSave']) {
 		return vscode.workspace.onWillSaveTextDocument(
-			grabyrightOnSave,
+			e => grabyrightOnSave(config["fmtCmds"], e),
 			null,
 			subscriptions,
 		);
@@ -108,7 +109,6 @@ export function activate(ctx: vscode.ExtensionContext) {
 		let onSaveSubscription = prepareOnSave(undefined, ctx.subscriptions);
 		ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration(() => {
 			// config updated
-			console.log("configuration updated");
 			onSaveSubscription = prepareOnSave(onSaveSubscription, ctx.subscriptions);
 		}));
 }
