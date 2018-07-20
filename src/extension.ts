@@ -64,7 +64,7 @@ function grabyrightOnSave(e: vscode.TextDocumentWillSaveEvent) {
 
 	e.waitUntil(new Promise((resolve, reject) => {
 		const formatted = grabbyrightDocument(doc);
-		if (formatted.length === 0) {
+		if (formatted.length === 0 || formatted === doc.getText()) {
 			resolve([]);
 			return;
 		}
